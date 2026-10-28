@@ -1,39 +1,53 @@
-USE [NasaEvents]
+/*******************************************************************************
+  Create_silver_earthquakes.sql
+  Purpose : Creates the silver earthquake table (one row per USGS event).
+  Source  : Loaded from dbo.bronze_earthquakes by silver_earthquakes.sql.
+  Run     : Once, before silver_earthquakes.sql.
+*******************************************************************************/
+
+USE [NasaEvents];
 GO
 
-/****** Object:  Table [dbo].[silver_earthquakes]    Script Date: 16/10/2026 15:04:48 ******/
-SET ANSI_NULLS ON
+SET ANSI_NULLS ON;
 GO
 
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER ON;
 GO
 
-CREATE TABLE [dbo].[silver_earthquakes](
-	[ID] [varchar](250) NOT NULL,
-	[Magnitude] [float] NULL,
-	[Place] [varchar](max) NULL,
-	[EventTimeUtc] [DateTime] NULL,
-	[UpdateTimeUtc] [DateTime] NULL,
-	[Felt] [float] NULL,
-	[Cdi] [float] NULL,
-	[Mmi] [float] NULL,
-	[Alert] [varchar](max) NULL,
-	[Tsunami] [bigint] NULL,
-	[Sig] [bigint] NULL,
-	[Nst] [float] NULL,
-	[Dmin] [float] NULL,
-	[Rms] [float] NULL,
-	[Gap] [float] NULL,
-	[Magnitude_Type] [varchar](max) NULL,
-	[Magnitude_Description] [varchar](max) NULL,
-	[Type] [varchar](max) NULL,
-	[Lon] [float] NULL,
-	[Lat] [float] NULL,
-	[DepthKm] [float] NULL,
-	[PlaceID] [int] NULL,
-	PRIMARY KEY ([ID])
-) 
+CREATE TABLE [dbo].[silver_earthquakes]
+(
+    -- Identity
+    [ID]                    VARCHAR(250) NOT NULL,   -- USGS event id (upper-cased)
+
+    -- Magnitude
+    [Magnitude]             FLOAT        NULL,
+    [Magnitude_Type]        VARCHAR(MAX) NULL,       -- raw code, e.g. 'ml', 'mww'
+    [Magnitude_Description] VARCHAR(MAX) NULL,       -- readable name of the code
+
+    -- Description and timing (UTC)
+    [Place]                 VARCHAR(MAX) NULL,       -- e.g. '10 km SW of Ridgecrest, CA'
+    [EventTimeUtc]          DATETIME     NULL,
+    [UpdateTimeUtc]         DATETIME     NULL,
+
+    -- Impact and quality measures
+    [Felt]                  FLOAT        NULL,       -- number of "felt" reports
+    [Cdi]                   FLOAT        NULL,       -- community-reported intensity
+    [Mmi]                   FLOAT        NULL,       -- instrumental intensity
+    [Alert]                 VARCHAR(MAX) NULL,       -- PAGER level, 'n/a' when missing
+    [Tsunami]               BIGINT       NULL,       -- 1 = tsunami flag set
+    [Sig]                   BIGINT       NULL,       -- significance score
+    [Nst]                   FLOAT        NULL,       -- stations used
+    [Dmin]                  FLOAT        NULL,
+    [Rms]                   FLOAT        NULL,
+    [Gap]                   FLOAT        NULL,
+    [Type]                  VARCHAR(MAX) NULL,       -- e.g. 'Earthquake'
+
+    -- Location
+    [Lon]                   FLOAT        NULL,
+    [Lat]                   FLOAT        NULL,
+    [DepthKm]               FLOAT        NULL,
+    [PlaceID]               INT          NULL,       -- nearest place (see silver_places)
+
+    CONSTRAINT [PK_silver_earthquakes] PRIMARY KEY ([ID])
+);
 GO
-
-
-

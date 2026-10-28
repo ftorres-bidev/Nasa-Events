@@ -1,74 +1,84 @@
-import requests
-import json
+"""Fetch NASA EONET natural events and prepare them for dbo.bronze_events.
+
+Design notes
+------------
+* The GeoJSON feed has one row per point on an event's track, so `ID` is NOT
+  unique on its own. The natural key is (ID, EventDate).
+* Only `Point` geometries are kept; polygons have nested coordinate lists.
+* Only the first category of each event is kept.
+* By default the script just previews the data. Set LOAD_TO_DB = True to
+  append it to SQL Server (the table must already exist, with DATETIME2
+  for EventDate; re-running will fail on the primary key unless you
+  truncate first).
+"""
 import pandas as pd
+import requests
 
-URL = 'https://eonet.gsfc.nasa.gov/api/v3/events/geojson'
+from db import get_engine
 
-response = requests.get(URL,timeout=30, headers={'accept':'application/json'})
+# --- Configuration -----------------------------------------------------------
+URL = "https://eonet.gsfc.nasa.gov/api/v3/events/geojson"
+TABLE = "bronze_events"
+LOAD_TO_DB = False   # flip to True to write to SQL Server
 
-data = response.json()
-
-events = data['features']
-df_events = pd.json_normalize(events)
-df_events = df_events[['properties.id', 'properties.title', 'properties.closed', 'properties.date', 'properties.categories','properties.magnitudeValue','properties.magnitudeUnit', 'geometry.type', 'geometry.coordinates']]
-df_events.info()
-df_events.rename(columns={
-    'properties.id': 'ID',
-    'properties.title': 'Title',
-    'properties.closed': 'Status',
-    'properties.date': 'EventDate',
-    'properties.categories': 'CategoryId',
-    'properties.magnitudeValue': 'MagnitudeValue',
-    'properties.magnitudeUnit': 'MagnitudeUnit', 
-    'geometry.type': 'GeometryType', 
-    'geometry.coordinates': 'Coordinates'
-    }, inplace=True)
-
-df_events['categoryId'] = df_events['CategoryId'].apply(lambda c: c[0]['id'])
-df_events['EventDate'] = pd.to_datetime(df_events['EventDate'])
-df_events = df_events[df_events['GeometryType'] == 'Point'].copy()
-df_events['Lon'] = df_events['Coordinates'].str[0]
-df_events['Lat'] = df_events['Coordinates'].str[1]
-df_events = df_events.drop(columns=['CategoryId', 'Coordinates'])
-df_events['Lon'] = pd.to_numeric(df_events['Lon'])
-df_events['Lat'] = pd.to_numeric(df_events['Lat'])
-df_events['EventDate'] = df_events['EventDate'].dt.tz_localize(None)
-df_events = df_events.drop_duplicates(subset=['ID', 'EventDate'])
+# Columns to pull from the flattened GeoJSON, and the names we give them.
+COLUMN_MAP = {
+    "properties.id": "ID",
+    "properties.title": "Title",
+    "properties.closed": "Status",              # actually a close date (null while open)
+    "properties.date": "EventDate",
+    "properties.categories": "CategoryList",    # list of {'id': ..., 'title': ...}
+    "properties.magnitudeValue": "MagnitudeValue",
+    "properties.magnitudeUnit": "MagnitudeUnit",
+    "geometry.type": "GeometryType",
+    "geometry.coordinates": "Coordinates",      # [lon, lat] for points
+}
 
 
+def fetch_events(url: str = URL) -> pd.DataFrame:
+    """Download the EONET feed and return one cleaned row per event point."""
+    response = requests.get(url, timeout=30, headers={"accept": "application/json"})
+    response.raise_for_status()  # stop early on HTTP errors
 
-print(df_events.head(5))
+    # Flatten the nested GeoJSON, keep only the columns we need, and rename them.
+    df = pd.json_normalize(response.json()["features"])
+    df = df[list(COLUMN_MAP)].rename(columns=COLUMN_MAP)
 
-# from sqlalchemy import create_engine, types as T
-# from sqlalchemy.engine import URL
+    # Keep points only (polygons have nested coordinates that break numeric casts).
+    df = df[df["GeometryType"] == "Point"].copy()
 
-# connection_url = URL.create(
-#     "mssql+pyodbc",
-#     host=r"localhost",   # or just "localhost"
-#     database="NasaEvents",
-#     username="felip",  # replace with your username
-#     password="1990",  # replace with your password
-#     query={
-#         "driver": "ODBC Driver 17 for SQL Server",
-#         "trusted_connection": "yes",      
-#         "TrustServerCertificate": "yes",
-#     },
-# )
+    # Use the first category of each event as its category.
+    df["categoryId"] = df["CategoryList"].apply(lambda c: c[0]["id"])
 
-# engine = create_engine(connection_url)
-# with engine.connect() as conn:
-#     print("Connected!")
+    # Split [lon, lat] into two numeric columns.
+    df["Lon"] = pd.to_numeric(df["Coordinates"].str[0])
+    df["Lat"] = pd.to_numeric(df["Coordinates"].str[1])
 
+    # Dates arrive timezone-aware (UTC); SQL Server DATETIME2 needs them naive.
+    df["EventDate"] = pd.to_datetime(df["EventDate"]).dt.tz_localize(None)
 
+    # Helper columns are no longer needed.
+    df = df.drop(columns=["CategoryList", "Coordinates"])
 
-# df_events.to_sql(
-#     "bronze_events",
-#     engine,
-#     if_exists="append",   # creates the table if missing, otherwise adds rows
-#     index=False,
-    
-# )
+    # Enforce the (ID, EventDate) primary key.
+    return df.drop_duplicates(subset=["ID", "EventDate"])
 
 
+def load_events(df: pd.DataFrame) -> None:
+    """Append the events to SQL Server (never use if_exists='replace' here,
+    it would recreate the table with pandas' default column types)."""
+    engine = get_engine()
+    df.to_sql(TABLE, engine, schema="dbo", if_exists="append", index=False)
+    print(f"Loaded {len(df)} rows into dbo.{TABLE}.")
 
 
+def main():
+    df_events = fetch_events()
+    print(df_events.head(5))
+
+    if LOAD_TO_DB:
+        load_events(df_events)
+
+
+if __name__ == "__main__":
+    main()

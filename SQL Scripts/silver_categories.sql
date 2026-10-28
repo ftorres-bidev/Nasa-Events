@@ -1,7 +1,16 @@
-USE NasaEvents
+/*******************************************************************************
+  silver_categories.sql
+  Purpose : Copies the category lookup from bronze to silver.
+  Note    : Plain INSERT, so run it against an empty silver_categories table
+            (re-running would fail on the primary key).
+*******************************************************************************/
 
-INSERT INTO silver_categories (CategoryID, Title)
+USE [NasaEvents];
+GO
 
-SELECT [CategoryID]
-      ,[Title]
-  FROM [NasaEvents].[dbo].[bronze_categories]
+INSERT INTO [dbo].[silver_categories] ([CategoryID], [Title])
+SELECT
+    [CategoryID],
+    [Title]
+FROM [dbo].[bronze_categories];
+GO

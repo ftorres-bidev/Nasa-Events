@@ -1,32 +1,48 @@
-import requests
-import json
+"""Build the EONET categories lookup table (dbo.bronze_categories).
+
+The table is small and fully derived from the feed, so it is rebuilt on every
+run (if_exists="replace"). Only the first category of each event is used,
+matching NasaEvents.py.
+"""
 import pandas as pd
-from db import get_engine 
+import requests
 
-URL = 'https://eonet.gsfc.nasa.gov/api/v3/events/geojson'
+from db import get_engine
 
-response = requests.get(URL,timeout=30, headers={'accept':'application/json'})
+# --- Configuration -----------------------------------------------------------
+URL = "https://eonet.gsfc.nasa.gov/api/v3/events/geojson"
+TABLE = "bronze_categories"
 
-data = response.json()
-events = data['features']
-df_events = pd.json_normalize(events)
-categories = df_events[[ 'properties.categories']]
-categories.rename(columns={
-    'properties.categories': 'CategoryId',
-    }, inplace=True)
 
-categories['CategoryID'] = categories['CategoryId'].apply(lambda row: row[0]['id'])
-categories['Title'] = categories['CategoryId'].apply(lambda row: row[0]['title'])
-categories = categories.drop(columns=['CategoryId'])
-#print(df_categories.head(5))
+def fetch_categories(url: str = URL) -> pd.DataFrame:
+    """Return the distinct (CategoryID, Title) pairs found in the feed."""
+    response = requests.get(url, timeout=30, headers={"accept": "application/json"})
+    response.raise_for_status()  # stop early on HTTP errors
 
-df_categories = categories.drop_duplicates(subset=['CategoryID', 'Title']).reset_index(drop=True)
+    df = pd.json_normalize(response.json()["features"])
 
-engine = get_engine()
+    # Each cell looks like [{'id': 'wildfires', 'title': 'Wildfires'}].
+    # Take the first category and split it into two columns.
+    first_category = df["properties.categories"].str[0]
+    categories = pd.DataFrame({
+        "CategoryID": first_category.str["id"],
+        "Title": first_category.str["title"],
+    })
 
-with engine.connect() as conn:
-    print("Connected!")
+    return categories.drop_duplicates().reset_index(drop=True)
 
-df_categories.to_sql(
-    'bronze_categories', 
-    engine, if_exists='replace', index=False)
+
+def main():
+    df_categories = fetch_categories()
+    engine = get_engine()
+
+    # Sanity check that the connection works before writing.
+    with engine.connect():
+        print("Connected!")
+
+    df_categories.to_sql(TABLE, engine, schema="dbo", if_exists="replace", index=False)
+    print(f"Loaded {len(df_categories)} categories into dbo.{TABLE}.")
+
+
+if __name__ == "__main__":
+    main()

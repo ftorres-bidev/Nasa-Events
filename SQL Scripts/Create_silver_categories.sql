@@ -1,16 +1,24 @@
-USE [NasaEvents]
+/*******************************************************************************
+  Create_silver_categories.sql
+  Purpose : Creates the silver lookup table of EONET event categories.
+  Source  : Loaded from dbo.bronze_categories by silver_categories.sql.
+  Run     : Once, before silver_categories.sql.
+*******************************************************************************/
+
+USE [NasaEvents];
 GO
 
-/****** Object:  Table [dbo].[silver_categories]    Script Date: 16/10/2026 15:21:13 ******/
-SET ANSI_NULLS ON
+SET ANSI_NULLS ON;
 GO
 
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER ON;
 GO
 
-CREATE TABLE [dbo].[silver_categories](
-	[CategoryID] [varchar](50) NOT NULL,
-	[Title] [varchar](50) NULL,
-	PRIMARY KEY ([CategoryID])
-) 
+CREATE TABLE [dbo].[silver_categories]
+(
+    [CategoryID] VARCHAR(50) NOT NULL,   -- EONET category id, e.g. 'wildfires'
+    [Title]      VARCHAR(50) NULL,       -- display name, e.g. 'Wildfires'
 
+    CONSTRAINT [PK_silver_categories] PRIMARY KEY ([CategoryID])
+);
+GO
