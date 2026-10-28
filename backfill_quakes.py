@@ -14,7 +14,7 @@ import pandas as pd
 import requests
 
 from db import get_engine
-from load_quakes import TABLE, fetch_quakes
+from NasaEarthquakes import TABLE, fetch_quakes
 
 BASE_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 START = date(2020, 1, 1)
