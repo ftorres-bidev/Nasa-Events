@@ -1,5 +1,5 @@
 /*******************************************************************************
-  Gold_fact_totalEvents.sql
+  Gold_fact_natural_event.sql
   Purpose : Gold-layer fact view counting EONET observations per
             category, country, year and month.
   Grain   : One row per (CategoryID, Country, Year, Month).
@@ -19,7 +19,7 @@ GO
 SET QUOTED_IDENTIFIER ON;
 GO
 
-CREATE VIEW [dbo].[Gold_fact_totalEvents]
+CREATE VIEW [dbo].[Gold_fact_natural_event]
 AS
 SELECT
     e.[categoryId]            AS [CategoryID],     -- joins to Gold_dim_categories
